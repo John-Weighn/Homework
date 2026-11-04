@@ -34,165 +34,228 @@ $$p(x) = a_0x^{e_0} + \dots + a_nx^{e_n}$$
 <!-- 以下為含有註解的完整 C++ 程式碼 (Source code + Comment) -->
 
 ```cpp
-#include <iostream>
-#include <cmath>
 #include <algorithm>
-
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
 using namespace std;
 
-// 向前宣告 Polynomial 類別，以便在 Term 中將其設為 friend
 class Polynomial;
 
+// 項目類別：存放單一項的係數與指數
 class Term {
-    friend class Polynomial; // 允許 Polynomial 直接存取私有成員
+    friend class Polynomial;
+    friend ostream& operator<<(ostream& os, const Polynomial& poly);
+    friend istream& operator>>(istream& is, Polynomial& poly);
 private:
-    float coef; // 係數 (coefficient)
-    int exp;    // 次方 (exponent)
+    float coef; // 係數 
+    int exp;    // 指數 
+public:
+    Term() : coef(0), exp(0) {}
+    Term(float c, int e) : coef(c), exp(e) {}
 };
 
+// 多項式類別
 class Polynomial {
 private:
-    Term *termArray; // 指向動態配置之 Term 陣列的指標
-    int capacity;    // 動態陣列目前的最大容量
-    int terms;       // 陣列中實際非零項的數量
-
-    // 內部輔助函數：新增項次，並在容量不足時自動擴充為 2 倍大
-    void NewTerm(const float c, const int e) {
-        if (terms == capacity) {
-            capacity = (capacity == 0) ? 2 : capacity * 2;
-            Term *temp = new Term[capacity];
-            for (int i = 0; i < terms; i++) {
-                temp[i] = termArray[i]; // 複製舊數據
-            }
-            delete[] termArray; // 釋放舊記憶體
-            termArray = temp;   // 指向新記憶體
-        }
-        termArray[terms].coef = c;
-        termArray[terms].exp = e;
-        terms++;
-    }
+    Term *termArray;    // 動態陣列，放非零項 
+    int capacity;       // 陣列容量 
+    int terms;          // 目前存入的非零項個數 
 
 public:
-    // 預設建構子：初始化為 0 多項式
-    Polynomial() : termArray(nullptr), capacity(0), terms(0) {}
+    // 預設建構子
+    Polynomial() : capacity(4), terms(0) {
+        termArray = new Term[capacity];
+    }
 
-    // 複製建構子：實作深複製 (Deep Copy) 避免指標重複釋放
-    Polynomial(const Polynomial& poly) {
-        capacity = poly.capacity;
-        terms = poly.terms;
-        if (capacity > 0) {
-            termArray = new Term[capacity];
-            for (int i = 0; i < terms; i++) termArray[i] = poly.termArray[i];
-        } else {
-            termArray = nullptr;
+    // 解構子
+    ~Polynomial() {
+        delete[] termArray;
+    }
+
+    // 複製建構子 (Deep Copy)
+    Polynomial(const Polynomial &b) {
+        capacity = b.capacity;
+        terms = b.terms;
+        termArray = new Term[capacity];
+        for (int i = 0; i < terms; i++) {
+            termArray[i] = b.termArray[i];
         }
     }
 
-    // 解構子：確實釋放動態記憶體，防止記憶體洩漏 (Memory Leak)
-    ~Polynomial() {
-        if (termArray != nullptr) delete[] termArray;
-    }
-
-    // 賦值運算子重載 (Assignment Operator)
-    Polynomial& operator=(const Polynomial& poly) {
-        if (this != &poly) {
-            if (termArray != nullptr) delete[] termArray;
-            capacity = poly.capacity;
-            terms = poly.terms;
-            if (capacity > 0) {
-                termArray = new Term[capacity];
-                for (int i = 0; i < terms; i++) termArray[i] = poly.termArray[i];
-            } else {
-                termArray = nullptr;
+    // 複製指派運算子 (Copy Assignment Operator)
+    Polynomial& operator=(const Polynomial &b) {
+        if (this != &b) {
+            delete[] termArray; // 釋放舊記憶體
+            capacity = b.capacity;
+            terms = b.terms;
+            termArray = new Term[capacity]; // 配置新記憶體
+            for (int i = 0; i < terms; i++) {
+                termArray[i] = b.termArray[i];
             }
         }
         return *this;
     }
 
-    // 多項式相加：使用雙指標法進行線性合併
-    Polynomial Add(Polynomial poly) {
-        Polynomial c;
-        int aPos = 0, bPos = 0;
-        while (aPos < terms && bPos < poly.terms) {
-            if (termArray[aPos].exp == poly.termArray[bPos].exp) {
-                float sumCoef = termArray[aPos].coef + poly.termArray[bPos].coef;
-                if (sumCoef != 0.0f) c.NewTerm(sumCoef, termArray[aPos].exp);
-                aPos++; bPos++;
-            } else if (termArray[aPos].exp > poly.termArray[bPos].exp) {
-                c.NewTerm(termArray[aPos].coef, termArray[aPos].exp);
-                aPos++;
-            } else {
-                c.NewTerm(poly.termArray[bPos].coef, poly.termArray[bPos].exp);
-                bPos++;
+    // 新增項至動態陣列中
+    void newTerm(const float theCoef, const int theExp) {
+        if (theCoef == 0) return; // 係數為 0 則不處理
+        if (terms == capacity) {
+            capacity *= 2; // 容量翻倍
+            Term *temp = new Term[capacity];
+            copy(termArray, termArray + terms, temp);
+            delete[] termArray;
+            termArray = temp;
+        }
+        termArray[terms].coef = theCoef;
+        termArray[terms++].exp = theExp;
+    }
+
+    // 精準排序與零項剔除機制 (關鍵核心)
+    void SortAndClean() {
+        // 1. 氣泡排序：依指數由大到小排序
+        for (int i = 0; i < terms; i++) {
+            for (int j = i + 1; j < terms; j++) {
+                if (termArray[i].exp < termArray[j].exp) {
+                    swap(termArray[i], termArray[j]);
+                }
             }
         }
-        // 複製剩餘的項次
-        for (; aPos < terms; aPos++) c.NewTerm(termArray[aPos].coef, termArray[aPos].exp);
-        for (; bPos < poly.terms; bPos++) c.NewTerm(poly.termArray[bPos].coef, poly.termArray[bPos].exp);
+        // 2. 原地合併同類項並剔除係數為 0 的項
+        int k = 0;
+        for (int i = 1; i < terms; i++) {
+            if (termArray[k].exp == termArray[i].exp) {
+                termArray[k].coef += termArray[i].coef;
+            } else {
+                if (termArray[k].coef != 0) k++; // 只有非 0 才保留並前進
+                termArray[k] = termArray[i];
+            }
+        }
+        if (terms > 0 && termArray[k].coef != 0) k++;
+        terms = k; // 更新真正的項數
+    }
+
+    // 多項式相加
+    Polynomial Add(const Polynomial &b) {
+        Polynomial c;
+        int aPos = 0, bPos = 0;
+        while ((aPos < terms) && (bPos < b.terms)) {
+            if (termArray[aPos].exp == b.termArray[bPos].exp) {
+                float t = termArray[aPos].coef + b.termArray[bPos].coef;
+                if (t != 0) c.newTerm(t, termArray[aPos].exp);
+                aPos++; bPos++;
+            }
+            else if (termArray[aPos].exp < b.termArray[bPos].exp) {
+                c.newTerm(b.termArray[bPos].coef, b.termArray[bPos].exp);
+                bPos++;
+            }
+            else {
+                c.newTerm(termArray[aPos].coef, termArray[aPos].exp);
+                aPos++;
+            }
+        }
+        for (; aPos < terms; aPos++) c.newTerm(termArray[aPos].coef, termArray[aPos].exp);
+        for (; bPos < b.terms; bPos++) c.newTerm(b.termArray[bPos].coef, b.termArray[bPos].exp);
         return c;
     }
 
-    // 多項式相乘：兩兩項次相乘後，呼叫 Add 函數進行多項式合併
-    Polynomial Mult(Polynomial poly) {
-        Polynomial result;
+    // 多項式相乘
+    Polynomial Mult(const Polynomial &b) {
+        Polynomial c; 
         for (int i = 0; i < terms; i++) {
-            Polynomial tempRow;
-            for (int j = 0; j < poly.terms; j++) {
-                float c = termArray[i].coef * poly.termArray[j].coef;
-                int e = termArray[i].exp + poly.termArray[j].exp;
-                if (c != 0.0f) tempRow.NewTerm(c, e);
+            for (int j = 0; j < b.terms; j++) {
+                float coef = termArray[i].coef * b.termArray[j].coef;
+                int exp = termArray[i].exp + b.termArray[j].exp;
+                
+                // 檢查新生成的指數是否已存在於結果中，有則直接累加
+                bool found = false;
+                for (int k = 0; k < c.terms; k++) {
+                    if (c.termArray[k].exp == exp) {
+                        c.termArray[k].coef += coef;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    c.newTerm(coef, exp);
+                }
             }
-            result = result.Add(tempRow); // 自動排序並合併同次方項
         }
-        return result;
+        c.SortAndClean(); // 乘法結束後，全面重新排序、合併同類項並剔除 0 係數項
+        return c;
     }
 
-    // 代入求值：計算 p(f) 的結果
-    float Eval(float f) {
-        float sum = 0.0f;
+    // 代入 x 計算值
+    float Eval(float x) {
+        float ans = 0;
         for (int i = 0; i < terms; i++) {
-            sum += termArray[i].coef * pow(f, termArray[i].exp);
+            ans += termArray[i].coef * pow(x, termArray[i].exp);
         }
-        return sum;
+        return ans;
+    }
+
+    // 重置多項式（便於重複輸入）
+    void reset() {
+        delete[] termArray;
+        capacity = 4;
+        terms = 0;
+        termArray = new Term[capacity];
     }
 
     friend ostream& operator<<(ostream& os, const Polynomial& poly);
     friend istream& operator>>(istream& is, Polynomial& poly);
 };
 
-// 重載輸入運算子
+// 輸入運算子多載：支援按 Enter 鍵直接結束輸入機制
 istream& operator>>(istream& is, Polynomial& poly) {
-    if (poly.termArray != nullptr) {
-        delete[] poly.termArray;
-        poly.termArray = nullptr;
+    string line;
+    if (getline(is >> ws, line)) {
+        stringstream ss(line);
+        float coef;
+        int exp;
+        while (ss >> coef >> exp) {
+            poly.newTerm(coef, exp);
+        }
     }
-    poly.capacity = 0; poly.terms = 0;
-    int totalTerms;
-    if (!(is >> totalTerms)) return is;
-    for (int i = 0; i < totalTerms; i++) {
-        float c; int e;
-        is >> c >> e;
-        if (c != 0.0f) poly.NewTerm(c, e);
-    }
+    poly.SortAndClean(); // 輸入完成後，第一時間進行排序與初次同類項清理
     return is;
 }
 
-// 重載輸出運算子：確保多項式漂亮排版
+// 輸出運算子多載：完美數學符號精細排版
 ostream& operator<<(ostream& os, const Polynomial& poly) {
-    if (poly.terms == 0) { os << "0"; return os; }
+    if (poly.terms == 0) {
+        os << "0";
+        return os;
+    }
+
     for (int i = 0; i < poly.terms; i++) {
         float c = poly.termArray[i].coef;
         int e = poly.termArray[i].exp;
-        if (i > 0 && c > 0) os << " + ";
-        else if (c < 0) {
-            if (i > 0) os << " - ";
-            else os << "-";
-            c = -c;
+
+        // 處理各項之間的正負號與空格間距
+        if (i == 0) {
+            if (c < 0) os << "-";
+        } else {
+            if (c > 0) os << " + ";
+            else os << " - ";
         }
-        if (c != 1.0f || e == 0) os << c;
-        if (e > 0) {
-            os << "x";
-            if (e > 1) os << "^" << e;
+
+        float absC = fabs(c);
+        
+        // 處理最高次方、一次方、常數項以及隱藏係數「1」的顯示邏輯
+        if (e == 0) {
+            os << absC;
+        } else if (e == 1) {
+            if (absC != 1) os << absC;
+            os << "X";
+        } else {
+            if (absC != 1) os << absC;
+            os << "X^" << e;
         }
     }
     return os;
@@ -200,14 +263,81 @@ ostream& operator<<(ostream& os, const Polynomial& poly) {
 
 int main() {
     Polynomial p1, p2;
-    if (cin >> p1 >> p2) {
-        Polynomial pAdd = p1.Add(p2);
-        Polynomial pMult = p1.Mult(p2);
-        cout << pAdd << '\n';
-        cout << pMult << '\n';
-        cout << p1.Eval(2.0f) << '\n';
-    }
+
+    cout << "=== 輸入多項式 P1 (格式: 係數 指數 係數 指數 ... 輸入完按 Enter 結束) ===\n";
+    cin >> p1;
+
+    cout << "\n=== 輸入多項式 P2 (格式: 係數 指數 係數 指數 ... 輸入完按 Enter 結束) ===\n";  
+    cin >> p2;
+
+    cout << "\n--------------------------------------------------" << endl;
+    cout << "讀取成功！目前的多項式狀態：" << endl;
+    cout << "P1(X) = " << p1 << endl;
+    cout << "P2(X) = " << p2 << endl;
+    cout << "--------------------------------------------------" << endl;
+
+    int choice;
+    do {
+        cout << "\n========== Polynomial 功能選單 ==========\n";
+        cout << "1. 顯示目前的 P1 與 P2\n";
+        cout << "2. 多項式相加 (P1 + P2)\n";
+        cout << "3. 多項式相乘 (P1 * P2)\n";
+        cout << "4. 代入 x 計算方程式結果\n";
+        cout << "5. 重新輸入 P1\n";
+        cout << "6. 重新輸入 P2\n";
+        cout << "0. 結束程式\n";
+        cout << "請輸入功能選項 (0-6): ";
+        cin >> choice;
+
+        switch (choice) {
+            case 1:
+                cout << "\nP1(X) = " << p1 << endl;
+                cout << "P2(X) = " << p2 << endl;
+                break;
+            case 2: {
+                Polynomial sum = p1.Add(p2);
+                cout << "\n>>> 加法結果 P1(X) + P2(X) = " << sum << "\n";
+                break;
+            }
+            case 3: {
+                Polynomial prod = p1.Mult(p2);
+                cout << "\n>>> 乘法結果 P1(X) * P2(X) = " << prod << "\n";
+                break;
+            }
+            case 4: {
+                float x;
+                cout << "\n請輸入要代入的 x 數值: ";
+                cin >> x;
+                cout << "P1(" << x << ") = " << p1.Eval(x) << "\n";
+                cout << "P2(" << x << ") = " << p2.Eval(x) << "\n";
+                break;
+            }
+            case 5:
+                cout << "\n[舊的 P1(X) = " << p1 << "]\n";
+                cout << "請重新輸入 P1 (輸入完按 Enter): ";
+                p1.reset();
+                cin >> p1;
+                cout << ">>> 更新後的 P1(X) = " << p1 << "\n";
+                break;
+            case 6:
+                cout << "\n[舊的 P2(X) = " << p2 << "]\n";
+                cout << "請重新輸入 P2 (輸入完按 Enter): ";
+                p2.reset();
+                cin >> p2;
+                cout << ">>> 更新後的 P2(X) = " << p2 << "\n";
+                break;
+            case 0:
+                cout << "\n感謝使用，程式已安全退出。\n";
+                break;
+            default:
+                cout << "\n無效的選項，請重新選擇！\n";
+                break;
+        }
+    } while (choice != 0);
+
+    return 0;
 }
+
 ```
 
 ---
