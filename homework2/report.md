@@ -71,7 +71,7 @@ public:
         delete[] termArray;
     }
 
-    // 複製建構子 (Deep Copy)
+    // 複製建構子
     Polynomial(const Polynomial &b) {
         capacity = b.capacity;
         terms = b.terms;
@@ -81,7 +81,7 @@ public:
         }
     }
 
-    // 複製指派運算子 (Copy Assignment Operator)
+    // 複製指派運算子
     Polynomial& operator=(const Polynomial &b) {
         if (this != &b) {
             delete[] termArray; // 釋放舊記憶體
@@ -145,7 +145,7 @@ void Polynomial::SortAndClean() {
     terms = k;
 }
 
-// 多項式相加 (雙指標線性掃描)
+// 多項式相加
 Polynomial Polynomial::Add(const Polynomial &b) {
     Polynomial c;
     int aPos = 0, bPos = 0;
@@ -203,7 +203,7 @@ float Polynomial::Eval(float x) {
     return ans;
 }
 
-// 輸入運算子多載 (支援 Enter 鍵直接結束)
+// 輸入運算子多載
 istream& operator>>(istream& is, Polynomial& poly) {
     string line;
     if (getline(is >> ws, line)) {
@@ -218,7 +218,7 @@ istream& operator>>(istream& is, Polynomial& poly) {
     return is;
 }
 
-// 輸出運算子多載 (精美數學排版)
+// 輸出運算子多載
 ostream& operator<<(ostream& os, const Polynomial& poly) {
     if (poly.terms == 0) {
         os << "0";
