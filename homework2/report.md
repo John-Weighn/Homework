@@ -31,7 +31,7 @@ $$p(x) = a_0x^{e_0} + \dots + a_nx^{e_n}$$
 
 ## 程式實作
 
-<!-- 以下為含有註解的完整 C++ 程式碼 (Source code + Comment) -->
+<!-- 以下為完整 C++ 程式碼 -->
 
 ```cpp
 #include <algorithm>
@@ -63,12 +63,12 @@ public:
 // 多項式類別
 class Polynomial {
 private:
-    Term *termArray;    // 動態陣列，放非零項 
+    Term *termArray;    // 動態陣列
     int capacity;       // 陣列容量 
-    int terms;          // 目前存入的非零項個數 
+    int terms;          // 目前存入的非零項數 
 
 public:
-    // 預設建構子
+    // 建構子
     Polynomial() : capacity(4), terms(0) {
         termArray = new Term[capacity];
     }
@@ -78,7 +78,7 @@ public:
         delete[] termArray;
     }
 
-    // 複製建構子 (Deep Copy)
+    // 複製建構子
     Polynomial(const Polynomial &b) {
         capacity = b.capacity;
         terms = b.terms;
@@ -88,7 +88,7 @@ public:
         }
     }
 
-    // 複製指派運算子 (Copy Assignment Operator)
+    // 複製運算子
     Polynomial& operator=(const Polynomial &b) {
         if (this != &b) {
             delete[] termArray; // 釋放舊記憶體
@@ -116,7 +116,6 @@ public:
         termArray[terms++].exp = theExp;
     }
 
-    // 精準排序與零項剔除機制 (關鍵核心)
     void SortAndClean() {
         // 1. 氣泡排序：依指數由大到小排序
         for (int i = 0; i < terms; i++) {
@@ -199,7 +198,7 @@ public:
         return ans;
     }
 
-    // 重置多項式（便於重複輸入）
+    // 重置多項式
     void reset() {
         delete[] termArray;
         capacity = 4;
@@ -211,7 +210,7 @@ public:
     friend istream& operator>>(istream& is, Polynomial& poly);
 };
 
-// 輸入運算子多載：支援按 Enter 鍵直接結束輸入機制
+// 輸入運算子多載：按 Enter 鍵直接結束輸入機制
 istream& operator>>(istream& is, Polynomial& poly) {
     string line;
     if (getline(is >> ws, line)) {
